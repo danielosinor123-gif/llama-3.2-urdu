@@ -1,0 +1,14 @@
+accelerate>=0.26.0
+bitsandbytes>=0.42.0
+datasets>=2.20.0
+evaluate>=0.4.1
+huggingface_hub>=0.23.0
+pandas>=2.1.0
+peft>=0.11.0
+rouge-score>=0.1.2
+sacrebleu>=2.3.1
+sentencepiece>=0.2.0
+tensorboard>=2.16.0
+torch>=2.2.0
+transformers>=4.41.0
+trl>=0.8.6
