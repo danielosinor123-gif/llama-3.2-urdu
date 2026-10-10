@@ -40,6 +40,31 @@ def set_pad_token(tokenizer):
     tokenizer.add_special_tokens({"pad_token": "[PAD]"})
 
 
+def filter_supported(config_cls, kwargs: dict, label: str) -> dict:
+    import inspect
+
+    params = inspect.signature(config_cls.__init__).parameters
+    accepts_var_kw = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in params.values())
+    if accepts_var_kw:
+        return kwargs
+    supported = {k: v for k, v in kwargs.items() if k in params}
+    dropped = sorted(set(kwargs) - set(supported))
+    if dropped:
+        print(f"[compat] {label} does not support: {dropped} (skipped)")
+    return supported
+
+
+def pick_strategy_key(config_cls) -> str:
+    import inspect
+
+    params = inspect.signature(config_cls.__init__).parameters
+    if "eval_strategy" in params:
+        return "eval_strategy"
+    if "evaluation_strategy" in params:
+        return "evaluation_strategy"
+    return "eval_strategy_dropped"
+
+
 def build_sft_trainer(model, tokenizer, train_dataset, eval_dataset, args_ns):
     common = dict(
         output_dir=args_ns.output_dir,
@@ -58,10 +83,6 @@ def build_sft_trainer(model, tokenizer, train_dataset, eval_dataset, args_ns):
         seed=args_ns.seed,
         save_total_limit=2,
     )
-    if eval_dataset is not None:
-        common["eval_strategy"] = "steps"
-        common["eval_steps"] = 50
-        common["per_device_eval_batch_size"] = args_ns.batch_size
 
     from trl import SFTTrainer
     try:
@@ -70,46 +91,36 @@ def build_sft_trainer(model, tokenizer, train_dataset, eval_dataset, args_ns):
         SFTConfig = None
 
     if SFTConfig is not None:
-        sft_kwargs = dict(
-            max_length=args_ns.max_seq_length,
-            packing=False,
-            dataset_text_field="text",
-        )
-        trainer_kwargs = {}
-        try:
-            cfg = SFTConfig(**common, **sft_kwargs)
-            trainer_kwargs = {"args": cfg, "processing_class": tokenizer}
-        except TypeError as exc:
-            if "eval_strategy" in str(exc):
-                common.pop("eval_strategy", None)
-                common["evaluation_strategy"] = "steps" if eval_dataset is not None else "no"
-                cfg = SFTConfig(**common, **sft_kwargs)
-                trainer_kwargs = {"args": cfg, "processing_class": tokenizer}
-            else:
-                raise
-        trainer = SFTTrainer(model=model, train_dataset=train_dataset, eval_dataset=eval_dataset, **trainer_kwargs)
-        return trainer
+        sft_kwargs = dict(max_length=args_ns.max_seq_length, packing=False, dataset_text_field="text")
+        strategy = pick_strategy_key(SFTConfig)
+        if eval_dataset is not None and not strategy.endswith("_dropped"):
+            common[strategy] = "steps"
+            common["eval_steps"] = 50
+            common["per_device_eval_batch_size"] = args_ns.batch_size
+        common = filter_supported(SFTConfig, common, "SFTConfig")
+        sft_kwargs = filter_supported(SFTConfig, sft_kwargs, "SFTConfig")
+        cfg = SFTConfig(**common, **sft_kwargs)
+        trainer_kwargs = filter_supported(SFTTrainer, {"args": cfg, "processing_class": tokenizer}, "SFTTrainer")
+        if "processing_class" not in trainer_kwargs:
+            trainer_kwargs = filter_supported(SFTTrainer, {"args": cfg, "tokenizer": tokenizer}, "SFTTrainer")
+        return SFTTrainer(model=model, train_dataset=train_dataset, eval_dataset=eval_dataset, **trainer_kwargs)
 
     from transformers import TrainingArguments
-    legacy = dict(common)
-    legacy.pop("eval_strategy", None)
-    legacy["evaluation_strategy"] = "steps" if eval_dataset is not None else "no"
-    try:
-        targs = TrainingArguments(**legacy)
-    except TypeError:
-        legacy.pop("evaluation_strategy", None)
-        legacy["eval_strategy"] = "steps" if eval_dataset is not None else "no"
-        targs = TrainingArguments(**legacy)
-    return SFTTrainer(
-        model=model,
-        train_dataset=train_dataset,
-        eval_dataset=eval_dataset,
+    strategy = pick_strategy_key(TrainingArguments)
+    if eval_dataset is not None and not strategy.endswith("_dropped"):
+        common[strategy] = "steps"
+        common["eval_steps"] = 50
+        common["per_device_eval_batch_size"] = args_ns.batch_size
+    common = filter_supported(TrainingArguments, common, "TrainingArguments")
+    targs = TrainingArguments(**common)
+    legacy_kwargs = dict(
         dataset_text_field="text",
         tokenizer=tokenizer,
         max_seq_length=args_ns.max_seq_length,
-        args=targs,
         packing=False,
     )
+    trainer_kwargs = filter_supported(SFTTrainer, legacy_kwargs, "SFTTrainer")
+    return SFTTrainer(model=model, train_dataset=train_dataset, eval_dataset=eval_dataset, args=targs, **trainer_kwargs)
 
 
 def main():
