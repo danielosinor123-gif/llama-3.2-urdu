@@ -124,6 +124,7 @@ def main():
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--lora_r", type=int, default=16)
     parser.add_argument("--lora_alpha", type=int, default=32)
+    parser.add_argument("--resume_from_checkpoint", type=str, default=None, help="Path to a trainer checkpoint dir to resume from.")
     args = parser.parse_args()
 
     train_rows = load_rows(args.train_data)
@@ -169,7 +170,7 @@ def main():
     model.print_trainable_parameters()
 
     trainer = build_sft_trainer(model, tokenizer, train_dataset, eval_dataset, args)
-    trainer.train()
+    trainer.train(resume_from_checkpoint=args.resume_from_checkpoint)
 
     history = trainer.state.log_history
     Path(args.output_dir).mkdir(parents=True, exist_ok=True)
