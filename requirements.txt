@@ -1,24 +1,17 @@
-PYTHON ?= python
-VENV ?= .venv
-
-install:
-	@$(PYTHON) -m venv $(VENV)
-	@. $(VENV)/bin/activate && pip install --upgrade pip && pip install -r requirements.txt
-
-prepare:
-	@. $(VENV)/bin/activate && python src/data/prepare_dataset.py --input data/urdu_demo.jsonl --output data/train.jsonl
-
-train:
-	@. $(VENV)/bin/activate && python src/train.py --train_data data/train.jsonl --output_dir models/urdu-llama-3.2-qLoRA --model_name meta-llama/Llama-3.2-3B-Instruct --epochs 1 --batch_size 2 --learning_rate 2e-4
-
-eval:
-	@. $(VENV)/bin/activate && python src/evaluate.py --model_dir models/urdu-llama-3.2-qLoRA --eval_data data/urdu_demo.jsonl
-
-chat:
-	@. $(VENV)/bin/activate && python src/inference.py --model_dir models/urdu-llama-3.2-qLoRA
-
-ollama:
-	@chmod +x scripts/setup_ollama.sh && ./scripts/setup_ollama.sh
-
-clean:
-	@rm -rf models/* .cache
+# Version ranges, not pins: Kaggle ships transformers 5.x / trl 0.2x, and
+# src/train.py adapts to both old and new APIs. Exact pins caused wheel-build
+# failures on newer Python versions.
+torch>=2.1.0
+transformers>=4.44.2
+datasets>=2.21.0
+peft>=0.12.0
+trl>=0.11.1
+bitsandbytes>=0.43.3
+accelerate>=0.33.0
+evaluate>=0.4.2
+rouge_score>=0.1.2
+sacrebleu>=2.4.0
+sentencepiece
+protobuf
+huggingface_hub
+pytest

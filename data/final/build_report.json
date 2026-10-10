@@ -1,0 +1,28 @@
+{
+  "seed_stats": {
+    "episodes": 20,
+    "scenes": 40,
+    "duplicates_dropped": 0,
+    "filtered_dropped": 0
+  },
+  "raw_stats": {
+    "raw_rows": 0,
+    "raw_kept": 0,
+    "raw_duplicates_dropped": 0,
+    "raw_filtered_dropped": 0
+  },
+  "split_sizes": {
+    "train": 45,
+    "val": 9,
+    "test": 8
+  },
+  "per_source": {
+    "seed": 40,
+    "seed_chat": 20,
+    "seed_continuation": 2
+  },
+  "leakage_check": {
+    "ok": true,
+    "leaks": []
+  }
+}

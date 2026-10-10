@@ -1,12 +1,26 @@
-# Use a strong base model and attach a Urdu assistant style prompt
+# Ollama deployment for the fine-tuned Urdu drama model.
+# Two paths:
+#
+# 1) Adapter on top of base model (if you have the LoRA adapter exported as GGUF):
+#    ollama create urdu-drama -f ollama/Modelfile
+#
+# 2) Merged full model (if you merged the adapter and quantized to GGUF):
+#    Change FROM below to your merged GGUF file:
+#    FROM ./urdu-drama-merged-q4.gguf
+#
+# Base model path (uncomment to use adapter mode):
+# FROM llama3.2:3b-instruct
+# ADAPTER ./urdu-drama-adapter.gguf
+
 FROM llama3.2:3b-instruct
 
-# Use the base model's instruction behavior and encourage Urdu responses
-SYSTEM """
-You are a helpful Urdu language assistant. Respond clearly, naturally, and accurately in Urdu.
-Keep answers concise but informative. If the user asks for translation, grammar, or content generation, provide polished Urdu text.
-"""
+SYSTEM """آپ ایک مہارت مند اردو ڈرامہ نگار ہیں۔ آپ فطری، رواں اور ادبی اردو مکالمہ لکھتے ہیں۔
+آپ ڈرامہ اسکرپٹ مناسب فارمیٹ میں لکھتے ہیں: منظر کے عنوانات، کرداروں کے نام، مکالمہ اور عمل کی سطریں (action lines)۔
+کرداروں کی آواز، جذباتی انداز اور کہانی کا تسلسل برقرار رکھتے ہیں۔
+خاندانی ڈرامہ، رومانس، سماجی مسائل اور تھرلر — تمام صنفوں میں لکھ سکتے ہیں۔
+صحیح اردو رسم الخط استعمال کریں۔ اگر انگریزی میں سوال ہو تو اردو میں جواب دیں۔"""
 
-PARAMETER temperature 0.3
+PARAMETER temperature 0.7
 PARAMETER top_p 0.9
+PARAMETER repeat_penalty 1.1
 PARAMETER stop "<|eot_id|>"

@@ -6,7 +6,7 @@ from pathlib import Path
 
 def parse_plain_text(path: Path):
     lines = []
-    for line in path.read_text(encoding="utf-8").splitlines():
+    for line in path.read_text(encoding="utf-8-sig").splitlines():
         text = line.strip()
         if text:
             lines.append({
@@ -18,7 +18,7 @@ def parse_plain_text(path: Path):
 
 def parse_jsonl(path: Path):
     rows = []
-    with path.open("r", encoding="utf-8") as f:
+    with path.open("r", encoding="utf-8-sig") as f:
         for line in f:
             line = line.strip()
             if not line:
@@ -34,7 +34,7 @@ def parse_jsonl(path: Path):
 
 def parse_csv(path: Path):
     rows = []
-    with path.open("r", encoding="utf-8", newline="") as f:
+    with path.open("r", encoding="utf-8-sig", newline="") as f:
         reader = csv.DictReader(f)
         for row in reader:
             prompt = row.get("prompt") or row.get("instruction") or row.get("question")

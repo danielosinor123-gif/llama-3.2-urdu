@@ -1,157 +1,108 @@
-# Llama 3.2 Urdu
+# Llama 3.2 Urdu Drama
 
-A practical fine-tuning project for building a high-quality Urdu-capable LLM using Meta's Llama 3.2, QLoRA, and Ollama deployment.
+A fine-tuning project that produces an Urdu drama-script writer: a Llama 3.2 model fine-tuned to write natural, idiomatic Urdu drama scripts — not machine-translated, not Hindi-leaning.
 
-This repository demonstrates how to:
-- prepare Urdu instruction data
-- fine-tune Llama 3.2 with QLoRA
-- evaluate response quality with metrics
-- run the model locally with `ollama`
-- generate a clean portfolio-ready project structure
+<p align="center">
+  <img src="https://img.shields.io/badge/Model-Llama_3.2-8A2BE2" alt="Llama 3.2" />
+  <img src="https://img.shields.io/badge/Method-QLoRA-00BFA6" alt="QLoRA" />
+  <img src="https://img.shields.io/badge/Language-Urdu_Nastaliq-0066CC" alt="Urdu" />
+  <img src="https://img.shields.io/badge/Deploy-Ollama-FF6B6B" alt="Ollama" />
+</p>
 
-## Why this project matters
+## What the model does
 
-Most public LLMs are trained primarily for English, and Urdu quality often suffers from:
-- limited instruction tuning data
-- weak alignment for Urdu-specific tasks
-- poor handling of dialectal nuance and local context
+- Writes natural, idiomatic Urdu dialogue (native Urdu script, Nastaliq-compatible Unicode)
+- Generates full scripts in proper drama format: scene headings, character dialogue, action lines
+- Maintains character voice, emotional tone, and story continuity across scenes
+- Handles genres: family drama, romance, social issues, thriller
 
-This project addresses that by creating a simple, reproducible pipeline for Urdu instruction tuning using a memory-efficient fine-tuning strategy.
-
-## Project goals
-
-- Fine-tune a Llama 3.2 model for Urdu text generation and QA
-- Use QLoRA to make memory usage manageable
-- Keep the setup understandable for researchers and builders
-- Make deployment easy with Ollama
-
-## Repo structure
+## Pipeline
 
 ```text
-.
-├── README.md
-├── requirements.txt
-├── .gitignore
-├── data/
-│   ├── urdu_demo.jsonl
-│   └── README.md
-├── src/
-│   ├── data/
-│   │   └── prepare_dataset.py
-│   ├── train.py
-│   ├── evaluate.py
-│   └── inference.py
-├── ollama/
-│   └── Modelfile
-├── scripts/
-│   └── setup_ollama.sh
-└── models/
-    └── .gitkeep
+data/seed/     ← hand-written formatted drama scripts (the format layer)
+data/raw/      ← pulled from Hugging Face (the dialogue/fluency layer)
+src/data/ingest_hf.py          ← pulls opus-100 ur-en, makhzan-urdu, UrduShers + provenance
+src/data/filter_urdu.py        ← Devanagari rejection, NFKC normalize, Hindi-ism blocklist
+src/data/subtitles_to_script.py← subtitle dialogue → pseudo drama scripts
+src/data/build_dataset.py      ← dedup, filters, episode-level leakage-free splits
+src/train.py                   ← QLoRA fine-tuning (fixed: pad token, seeds, eval split)
+src/evaluate.py                ← ROUGE/BLEU/chrF + script structure score + baseline compare
+src/stress_test.py             ← holes/leaks/contamination checks (CI gate)
 ```
 
 ## Quick start
-
-1. Create a Python environment:
 
 ```bash
 python -m venv .venv
 source .venv/bin/activate
 pip install -U pip
 pip install -r requirements.txt
-```
 
-2. Prepare a dataset:
+# 1) Ingest public Urdu data from Hugging Face (optional, adds scale)
+python src/data/ingest_hf.py --output_dir data/raw --max_rows 20000
+python src/data/subtitles_to_script.py --input data/raw/opus100_ur_en.jsonl --output data/raw/pseudo_scripts.jsonl
 
-```bash
-python src/data/prepare_dataset.py \
-  --input data/urdu_demo.jsonl \
-  --output data/train.jsonl
-```
+# 2) Build the final dataset (filters + dedup + leakage-free splits)
+python src/data/build_dataset.py --seed_dir data/seed --raw_dir data/raw --output_dir data/final
 
-3. Fine-tune using QLoRA:
+# 3) Stress test before training (exit 1 on any failure)
+python src/stress_test.py --data_dir data/final --seed_dir data/seed
 
-```bash
+# 4) Fine-tune with QLoRA
 python src/train.py \
-  --train_data data/train.jsonl \
-  --output_dir models/urdu-llama-3.2-qLoRA \
-  --model_name meta-llama/Llama-3.2-3B-Instruct
-```
+  --train_data data/final/train.jsonl \
+  --eval_data data/final/val.jsonl \
+  --output_dir models/urdu-drama-3.2-qLoRA \
+  --model_name meta-llama/Llama-3.2-3B-Instruct \
+  --epochs 2
 
-4. Evaluate:
-
-```bash
+# 5) Evaluate fine-tuned vs baseline, same prompts
 python src/evaluate.py \
-  --model_dir models/urdu-llama-3.2-qLoRA \
-  --eval_data data/urdu_demo.jsonl
+  --model_dir models/urdu-drama-3.2-qLoRA \
+  --eval_data data/final/test.jsonl \
+  --baseline_model meta-llama/Llama-3.2-3B-Instruct \
+  --output reports/eval.json
+
+# 6) Inference
+python src/inference.py --model_dir models/urdu-drama-3.2-qLoRA \
+  --prompt "ایک family drama ڈرامے کا منظر لکھیں۔ کردار: امجد صاحب، شازیہ۔"
+
+# 7) Unit tests
+python -m pytest tests/ -q
 ```
 
-5. Run inference:
+## Why a hybrid dataset (no public drama-script dataset exists)
 
-```bash
-python src/inference.py \
-  --model_dir models/urdu-llama-3.2-qLoRA \
-  --prompt "اردو میں ایک مختصر جواب لکھیں کہ موسم کیسی ہے؟"
-```
+| Layer | Source | Teaches |
+|---|---|---|
+| Format | `data/seed/` — hand-written formatted drama scripts | Scene structure, speaker labels, action lines |
+| Dialogue | `Helsinki-NLP/opus-100` (ur-en, subtitles) | Natural, colloquial spoken Urdu |
+| Grammar | `ReySajju742/makhzan-urdu` | Formal register, editorial-quality prose |
+| Flavour | `keplersystems/UrduShers-10k` | Poetic and emotional register |
 
-6. Deploy with Ollama:
+Every pulled source is filtered (Devanagari rejection, Hindi-ism screening, script-ratio checks) and every row keeps provenance, so benchmarks can report per-source quality.
 
-```bash
-chmod +x scripts/setup_ollama.sh
-./scripts/setup_ollama.sh
-```
+## Data format
 
-## Dataset requirements
-
-The training code expects prompt-response pairs in JSONL format:
+Seed episodes (`data/seed/*.jsonl`):
 
 ```json
-{"prompt": "اردو میں ترجمہ کریں: 'The weather is nice today.'", "response": "آج موسم اچھا ہے۔"}
+{
+  "episode_id": "family-01",
+  "genre": "family_drama",
+  "title": "بڑے گھر کی بیٹھک",
+  "characters": ["امجد صاحب", "شازیہ"],
+  "character_sheet": {"امجد صاحب": "۶۵ سالہ بزرگ، روایتی مزاج"},
+  "scenes": [{"scene_number": 1, "setting": "...", "lines": [{"speaker": "امجد صاحب", "action": "چائے لیتے ہوئے", "text": "..."}]}]
+}
 ```
 
-You can also use CSV or a plain text file, then convert it with `prepare_dataset.py`.
+Training rows (`data/final/*.jsonl`): `{"prompt", "response", "source", "episode_id", "genre"}` and multi-turn `{"messages", ...}` episode conversations.
 
-## Training details
+## Documentation
 
-This project uses:
-- Llama 3.2 instruct model as the base model
-- QLoRA for PEFT-based fine-tuning
-- `bitsandbytes` for 4-bit quantization
-- `trl.SFTTrainer` for efficient fine-tuning
-- memory-conscious settings suitable for local GPU workloads
-
-## Metrics included
-
-The evaluation flow tracks:
-- training loss
-- validation loss
-- perplexity-like practical quality tracking
-- Rouge-L for instruction-response quality
-- sample generation outputs for qualitative review
-
-## Ollama deployment
-
-The project includes a Modelfile that creates a local Ollama model wrapper. After you have a trained model or a converted exported checkpoint, run:
-
-```bash
-ollama create urdu-llama -f ollama/Modelfile
-ollama run urdu-llama
-```
-
-## Notes about model access
-
-Llama 3.2 may require access to the Hugging Face model hub, depending on your account and license status. You may need to authenticate:
-
-```bash
-huggingface-cli login
-```
-
-## Recommended next steps
-
-- add more Urdu instruction tuning data
-- benchmark against a baseline model
-- expand to conversation-style examples
-- deploy a small web UI or API around the model
-- publish a more polished version of this repo for GitHub portfolio use
+- [docs/BENCHMARKS.md](docs/BENCHMARKS.md) — benchmark protocol, required results table, stress test spec
+- [docs/EVALUATION.md](docs/EVALUATION.md) — metric definitions, failure modes, human eval protocol
 
 ## License
 
@@ -159,10 +110,5 @@ MIT
 
 ## Acknowledgements
 
-- Meta Llama
-- Hugging Face Transformers
-- PEFT
-- TRL
-- Ollama
-
-This project is designed to be educational, reproducible, and suitable as a real-world portfolio repository.
+- Meta Llama, Hugging Face Transformers, PEFT, TRL, Ollama
+- Helsinki-NLP opus-100, makhzan-urdu, UrduShers-10k contributors
