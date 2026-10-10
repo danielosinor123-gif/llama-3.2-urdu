@@ -20,7 +20,9 @@ def load_rows(path: str):
 
 
 def to_text(item: dict, tokenizer) -> dict:
-    if "messages" in item:
+    # NOTE: rows with prompt/response and rows with messages share one JSON schema,
+    # so absent fields come back as None, not missing keys - check truthiness.
+    if item.get("messages"):
         text = tokenizer.apply_chat_template(item["messages"], tokenize=False)
     else:
         messages = [{"role": "user", "content": item["prompt"]}, {"role": "assistant", "content": item["response"]}]

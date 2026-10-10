@@ -19,7 +19,7 @@ def load_rows(path: Path):
 
 
 def get_text(item: dict) -> str:
-    if "messages" in item:
+    if item.get("messages"):
         return " ".join(m.get("content", "") for m in item["messages"])
     return item.get("response", "") + " " + item.get("prompt", "")
 
@@ -102,7 +102,7 @@ def check_prompt_repetition(data_dir: Path, max_repeats: int = 10):
         rows = load_rows(path)
         prompt_counts = {}
         for row in rows:
-            if "messages" in row:
+            if row.get("messages"):
                 user_msgs = [m.get("content", "") for m in row["messages"] if m.get("role") == "user"]
                 prompt = (user_msgs[0] if user_msgs else "")[:100]
             else:

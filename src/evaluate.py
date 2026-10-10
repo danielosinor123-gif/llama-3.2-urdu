@@ -24,7 +24,8 @@ def load_rows(path: str):
 
 
 def build_messages(item: dict):
-    if "messages" in item:
+    # schema unification: absent fields arrive as None - check truthiness
+    if item.get("messages"):
         return item["messages"]
     return [{"role": "user", "content": item["prompt"]}, {"role": "assistant", "content": item["response"]}]
 

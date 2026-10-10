@@ -90,3 +90,13 @@ def test_jsonl_round_trip(tmp_path):
     path.write_text(json.dumps(episode, ensure_ascii=False) + "\n", encoding="utf-8")
     loaded = json.loads(path.read_text(encoding="utf-8"))
     assert loaded == episode
+
+def test_mixed_schema_truthiness():
+    # load_dataset("json") unifies schemas: rows missing a field get None, not a missing key.
+    # "messages" in item is True even when messages is None - truthiness check is required.
+    scene_row = {"prompt": "q", "response": "a", "messages": None}
+    chat_row = {"prompt": None, "response": None, "messages": [{"role": "user", "content": "u"}, {"role": "assistant", "content": "h"}]}
+
+    assert scene_row.get("messages") is None
+    assert chat_row.get("messages")
+    assert "messages" in scene_row  # the trap that caused the jinja UndefinedError
